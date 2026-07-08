@@ -1,0 +1,29 @@
+#ifndef TEDIT_PLATFORM_H
+#define TEDIT_PLATFORM_H
+
+#include <stdbool.h>
+
+#define TEDIT_KEY_CTRL_Q 17
+#define TEDIT_KEY_CTRL_S 19
+#define TEDIT_KEY_BACKSPACE 127
+#define TEDIT_KEY_ARROW_LEFT 1000
+#define TEDIT_KEY_ARROW_RIGHT 1001
+#define TEDIT_KEY_ARROW_UP 1002
+#define TEDIT_KEY_ARROW_DOWN 1003
+
+typedef struct Platform {
+    int raw_mode_enabled;
+#ifdef TEDIT_PLATFORM_POSIX
+    void *original_termios;
+#endif
+} Platform;
+
+bool platform_init(Platform *platform);
+void platform_shutdown(Platform *platform);
+bool platform_enter_raw_mode(Platform *platform);
+void platform_leave_raw_mode(Platform *platform);
+int platform_read_key(Platform *platform);
+void platform_write(Platform *platform, const char *data, int length);
+bool platform_get_terminal_size(Platform *platform, int *rows, int *cols);
+
+#endif
