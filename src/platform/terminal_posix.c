@@ -48,6 +48,7 @@ void platform_leave_raw_mode(Platform *platform) {
 }
 
 int platform_key_from_escape_sequence(const char *sequence) {
+    if (strcmp(sequence, "q") == 0 || strcmp(sequence, "Q") == 0) return TEDIT_KEY_CTRL_Q;
     if (strcmp(sequence, "[A") == 0) return TEDIT_KEY_ARROW_UP;
     if (strcmp(sequence, "[B") == 0) return TEDIT_KEY_ARROW_DOWN;
     if (strcmp(sequence, "[C") == 0) return TEDIT_KEY_ARROW_RIGHT;
@@ -75,7 +76,7 @@ int platform_read_key(Platform *platform) {
             if (read(STDIN_FILENO, &next, 1) != 1) break;
             seq[len++] = next;
             seq[len] = '\0';
-            if ((next >= 'A' && next <= 'Z') || next == '~') {
+            if ((next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z') || next == '~') {
                 break;
             }
         }

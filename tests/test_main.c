@@ -275,6 +275,44 @@ static void test_editor_open_missing_file_starts_write_mode(void) {
     remove(path);
 }
 
+static void test_ctrl_s_saves_missing_path_document(void) {
+    const char *path = "tedit_test_ctrl_s_missing.tmp";
+    char buffer[32];
+    size_t length = 0;
+    remove(path);
+
+    Editor editor;
+    editor_init(&editor);
+    assert(editor_open(&editor, path) == 1);
+    assert(editor.mode == EDITOR_MODE_WRITE);
+    editor_handle_key(&editor, 'O');
+    editor_handle_key(&editor, 'K');
+    assert(editor.document.dirty == true);
+
+    editor_handle_key(&editor, TEDIT_KEY_CTRL_S);
+
+    assert(editor.document.dirty == false);
+    assert(strcmp(editor.status, "Saved") == 0);
+    read_file_bytes(path, buffer, sizeof(buffer), &length);
+    assert(length == 2);
+    assert(memcmp(buffer, "OK", 2) == 0);
+    editor_destroy(&editor);
+    remove(path);
+}
+
+static void test_tab_inserts_literal_tab_in_write_mode(void) {
+    Editor editor;
+    editor_init(&editor);
+    editor_enter_write_mode(&editor);
+
+    editor_handle_key(&editor, '\t');
+
+    assert(editor.document.lines[0].length == 1);
+    assert(editor.document.lines[0].data[0] == '\t');
+    assert(editor.cursor.col == 1);
+    editor_destroy(&editor);
+}
+
 static void test_active_line_horizontal_scroll_resets_when_row_changes(void) {
     Editor editor;
     editor_init(&editor);
@@ -351,6 +389,8 @@ static void test_escape_sequence_navigation_mapping(void) {
     assert(platform_key_from_escape_sequence("[1;5H") == TEDIT_KEY_CTRL_HOME);
     assert(platform_key_from_escape_sequence("[1;5F") == TEDIT_KEY_CTRL_END);
     assert(platform_key_from_escape_sequence("[3~") == TEDIT_KEY_DELETE);
+    assert(platform_key_from_escape_sequence("q") == TEDIT_KEY_CTRL_Q);
+    assert(platform_key_from_escape_sequence("Q") == TEDIT_KEY_CTRL_Q);
     assert(platform_key_from_escape_sequence("[unknown") == '\x1b');
 }
 
@@ -371,6 +411,8 @@ int main(void) {
     test_editor_backspace_newline_delete_and_quit();
     test_editor_open_existing_file_starts_read_mode();
     test_editor_open_missing_file_starts_write_mode();
+    test_ctrl_s_saves_missing_path_document();
+    test_tab_inserts_literal_tab_in_write_mode();
     test_active_line_horizontal_scroll_resets_when_row_changes();
     test_home_end_move_within_line();
     test_page_and_document_navigation_keys();

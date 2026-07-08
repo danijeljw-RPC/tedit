@@ -123,6 +123,7 @@ static bool editor_is_editing_key(int key) {
            key == TEDIT_KEY_DELETE ||
            key == '\r' ||
            key == '\n' ||
+           key == '\t' ||
            (key >= 32 && key <= 126);
 }
 
@@ -166,6 +167,12 @@ void editor_handle_key(Editor *editor, int key) {
 
     if (key == '\r' || key == '\n') {
         document_insert_newline(&editor->document, editor->cursor.row, editor->cursor.col, &editor->cursor.row, &editor->cursor.col);
+        return;
+    }
+
+    if (key == '\t') {
+        document_insert_char(&editor->document, editor->cursor.row, editor->cursor.col, '\t');
+        editor->cursor.col++;
         return;
     }
 
