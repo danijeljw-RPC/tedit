@@ -61,6 +61,11 @@ int platform_read_key(Platform *platform) {
                 case 'B': return TEDIT_KEY_ARROW_DOWN;
                 case 'C': return TEDIT_KEY_ARROW_RIGHT;
                 case 'D': return TEDIT_KEY_ARROW_LEFT;
+                case '3': {
+                    char tilde;
+                    if (read(STDIN_FILENO, &tilde, 1) == 1 && tilde == '~') return TEDIT_KEY_DELETE;
+                    break;
+                }
             }
         }
         return '\x1b';

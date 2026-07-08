@@ -15,6 +15,14 @@ static void write_line_slice(Platform *platform, const TextLine *line, size_t le
     platform_write(platform, line->data + left, (int)count);
 }
 
+static const char *mode_label(const Editor *editor) {
+    return editor->mode == EDITOR_MODE_WRITE ? "WRITE" : "READ";
+}
+
+static const char *line_ending_label(const Document *document) {
+    return document->line_ending == DOCUMENT_LINE_ENDING_CRLF ? "CRLF" : "LF";
+}
+
 void ansi_render_editor(Platform *platform, const Editor *editor) {
     char buf[512];
     int rows = editor->screen_rows;
@@ -42,11 +50,13 @@ void ansi_render_editor(Platform *platform, const Editor *editor) {
     }
 
     write_str(platform, "\x1b[7m");
-    snprintf(buf, sizeof(buf), " %.180s%s  Ln %zu, Col %zu ",
+    snprintf(buf, sizeof(buf), " %.160s%s  Ln %zu, Col %zu  UTF-8 %s %s ",
         editor->document.path == NULL ? "[No Name]" : editor->document.path,
         editor->document.dirty ? " *" : "",
         editor->cursor.row + 1,
-        editor->cursor.col + 1);
+        editor->cursor.col + 1,
+        line_ending_label(&editor->document),
+        mode_label(editor));
     int len = (int)strlen(buf);
     if (len > cols) len = cols;
     platform_write(platform, buf, len);

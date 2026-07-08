@@ -11,6 +11,8 @@ void editor_init(Editor *editor) {
     editor->cursor.col = 0;
     editor->viewport.top_row = 0;
     editor->viewport.active_line_left_col = 0;
+    editor->viewport.active_row = 0;
+    editor->mode = EDITOR_MODE_READ;
     editor->screen_rows = 24;
     editor->screen_cols = 80;
     editor->should_quit = 0;
@@ -22,11 +24,13 @@ void editor_destroy(Editor *editor) {
 }
 
 int editor_open(Editor *editor, const char *path) {
-    if (!document_open(&editor->document, path)) {
+    bool created_new = false;
+    if (!document_load_path(&editor->document, path, &created_new)) {
         snprintf(editor->status, sizeof(editor->status), "Could not open %s", path);
         return 0;
     }
-    snprintf(editor->status, sizeof(editor->status), "Opened %s", path);
+    editor->mode = created_new ? EDITOR_MODE_WRITE : EDITOR_MODE_READ;
+    snprintf(editor->status, sizeof(editor->status), "%s %s", created_new ? "New file" : "Opened", path);
     return 1;
 }
 
@@ -38,9 +42,14 @@ static void clamp_cursor(Editor *editor) {
     if (editor->cursor.col > line->length) editor->cursor.col = line->length;
 }
 
-static void update_viewport(Editor *editor) {
+void editor_update_viewport(Editor *editor) {
     int usable_rows = editor->screen_rows - 2;
     if (usable_rows < 1) usable_rows = 1;
+
+    if (editor->viewport.active_row != editor->cursor.row) {
+        editor->viewport.active_row = editor->cursor.row;
+        editor->viewport.active_line_left_col = 0;
+    }
 
     if (editor->cursor.row < editor->viewport.top_row) {
         editor->viewport.top_row = editor->cursor.row;
@@ -79,11 +88,27 @@ static void move_cursor(Editor *editor, int key) {
     clamp_cursor(editor);
 }
 
-static void handle_key(Editor *editor, Platform *platform, int key) {
-    (void)platform;
+void editor_enter_write_mode(Editor *editor) {
+    editor->mode = EDITOR_MODE_WRITE;
+    snprintf(editor->status, sizeof(editor->status), "WRITE mode");
+}
 
+static bool editor_is_editing_key(int key) {
+    return key == TEDIT_KEY_BACKSPACE ||
+           key == TEDIT_KEY_DELETE ||
+           key == '\r' ||
+           key == '\n' ||
+           (key >= 32 && key <= 126);
+}
+
+void editor_handle_key(Editor *editor, int key) {
     if (key == TEDIT_KEY_CTRL_Q) {
         editor->should_quit = 1;
+        return;
+    }
+
+    if (editor->mode == EDITOR_MODE_READ && (key == 'w' || key == 'W')) {
+        editor_enter_write_mode(editor);
         return;
     }
 
@@ -93,14 +118,28 @@ static void handle_key(Editor *editor, Platform *platform, int key) {
         return;
     }
 
-    if (key == TEDIT_KEY_BACKSPACE) {
-        document_delete_char_before(&editor->document, editor->cursor.row, editor->cursor.col);
-        if (editor->cursor.col > 0) editor->cursor.col--;
+    if (key >= TEDIT_KEY_ARROW_LEFT && key <= TEDIT_KEY_ARROW_DOWN) {
+        move_cursor(editor, key);
         return;
     }
 
-    if (key >= TEDIT_KEY_ARROW_LEFT && key <= TEDIT_KEY_ARROW_DOWN) {
-        move_cursor(editor, key);
+    if (editor->mode == EDITOR_MODE_READ && editor_is_editing_key(key)) {
+        snprintf(editor->status, sizeof(editor->status), "READ mode - press w to edit");
+        return;
+    }
+
+    if (key == TEDIT_KEY_BACKSPACE) {
+        document_delete_char_before(&editor->document, editor->cursor.row, editor->cursor.col, &editor->cursor.row, &editor->cursor.col);
+        return;
+    }
+
+    if (key == TEDIT_KEY_DELETE) {
+        document_delete_char_at(&editor->document, editor->cursor.row, editor->cursor.col);
+        return;
+    }
+
+    if (key == '\r' || key == '\n') {
+        document_insert_newline(&editor->document, editor->cursor.row, editor->cursor.col, &editor->cursor.row, &editor->cursor.col);
         return;
     }
 
@@ -118,11 +157,11 @@ int editor_run(Editor *editor, Platform *platform) {
     while (!editor->should_quit) {
         platform_get_terminal_size(platform, &editor->screen_rows, &editor->screen_cols);
         clamp_cursor(editor);
-        update_viewport(editor);
+        editor_update_viewport(editor);
         ansi_render_editor(platform, editor);
 
         int key = platform_read_key(platform);
-        handle_key(editor, platform, key);
+        editor_handle_key(editor, key);
     }
 
     platform_leave_raw_mode(platform);

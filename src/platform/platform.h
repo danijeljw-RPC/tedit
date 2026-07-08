@@ -10,6 +10,7 @@
 #define TEDIT_KEY_ARROW_RIGHT 1001
 #define TEDIT_KEY_ARROW_UP 1002
 #define TEDIT_KEY_ARROW_DOWN 1003
+#define TEDIT_KEY_DELETE 1004
 
 typedef struct Platform {
     int raw_mode_enabled;

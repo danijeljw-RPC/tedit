@@ -39,11 +39,23 @@ enable_testing()
 add_executable(tedit_tests
     tests/test_main.c
     src/core/document.c
+    src/core/editor.c
     src/core/keymap.c
     src/core/search.c
     src/core/undo.c
+    src/platform/platform.c
+    src/platform/terminal_posix.c
+    src/platform/terminal_win32.c
+    src/renderer/ansi_renderer.c
     src/renderer/screen_buffer.c
 )
 
 target_include_directories(tedit_tests PRIVATE src)
+
+if (WIN32)
+    target_compile_definitions(tedit_tests PRIVATE TEDIT_PLATFORM_WINDOWS=1)
+else()
+    target_compile_definitions(tedit_tests PRIVATE TEDIT_PLATFORM_POSIX=1)
+endif()
+
 add_test(NAME tedit_tests COMMAND tedit_tests)
