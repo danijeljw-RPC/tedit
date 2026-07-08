@@ -3,6 +3,7 @@
 #ifndef TEDIT_PLATFORM_WINDOWS
 
 #include <stdlib.h>
+#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -46,29 +47,39 @@ void platform_leave_raw_mode(Platform *platform) {
     platform->raw_mode_enabled = 0;
 }
 
+int platform_key_from_escape_sequence(const char *sequence) {
+    if (strcmp(sequence, "[A") == 0) return TEDIT_KEY_ARROW_UP;
+    if (strcmp(sequence, "[B") == 0) return TEDIT_KEY_ARROW_DOWN;
+    if (strcmp(sequence, "[C") == 0) return TEDIT_KEY_ARROW_RIGHT;
+    if (strcmp(sequence, "[D") == 0) return TEDIT_KEY_ARROW_LEFT;
+    if (strcmp(sequence, "[H") == 0 || strcmp(sequence, "[1~") == 0) return TEDIT_KEY_HOME;
+    if (strcmp(sequence, "[F") == 0 || strcmp(sequence, "[4~") == 0) return TEDIT_KEY_END;
+    if (strcmp(sequence, "[3~") == 0) return TEDIT_KEY_DELETE;
+    if (strcmp(sequence, "[5~") == 0) return TEDIT_KEY_PAGE_UP;
+    if (strcmp(sequence, "[6~") == 0) return TEDIT_KEY_PAGE_DOWN;
+    if (strcmp(sequence, "[1;5H") == 0) return TEDIT_KEY_CTRL_HOME;
+    if (strcmp(sequence, "[1;5F") == 0) return TEDIT_KEY_CTRL_END;
+    return '\x1b';
+}
+
 int platform_read_key(Platform *platform) {
     (void)platform;
     char c;
     while (read(STDIN_FILENO, &c, 1) != 1) {}
 
     if (c == '\x1b') {
-        char seq[3];
-        if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-        if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
-        if (seq[0] == '[') {
-            switch (seq[1]) {
-                case 'A': return TEDIT_KEY_ARROW_UP;
-                case 'B': return TEDIT_KEY_ARROW_DOWN;
-                case 'C': return TEDIT_KEY_ARROW_RIGHT;
-                case 'D': return TEDIT_KEY_ARROW_LEFT;
-                case '3': {
-                    char tilde;
-                    if (read(STDIN_FILENO, &tilde, 1) == 1 && tilde == '~') return TEDIT_KEY_DELETE;
-                    break;
-                }
+        char seq[8];
+        size_t len = 0;
+        while (len + 1 < sizeof(seq)) {
+            char next;
+            if (read(STDIN_FILENO, &next, 1) != 1) break;
+            seq[len++] = next;
+            seq[len] = '\0';
+            if ((next >= 'A' && next <= 'Z') || next == '~') {
+                break;
             }
         }
-        return '\x1b';
+        return len == 0 ? '\x1b' : platform_key_from_escape_sequence(seq);
     }
 
     return c;

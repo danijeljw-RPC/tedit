@@ -69,6 +69,8 @@ void editor_update_viewport(Editor *editor) {
 }
 
 static void move_cursor(Editor *editor, int key) {
+    size_t usable_rows = editor->screen_rows > 2 ? (size_t)(editor->screen_rows - 2) : 1;
+
     switch (key) {
         case TEDIT_KEY_ARROW_LEFT:
             if (editor->cursor.col > 0) editor->cursor.col--;
@@ -81,6 +83,29 @@ static void move_cursor(Editor *editor, int key) {
             break;
         case TEDIT_KEY_ARROW_DOWN:
             if (editor->cursor.row + 1 < editor->document.line_count) editor->cursor.row++;
+            break;
+        case TEDIT_KEY_HOME:
+            editor->cursor.col = 0;
+            break;
+        case TEDIT_KEY_END:
+            editor->cursor.col = editor->document.lines[editor->cursor.row].length;
+            break;
+        case TEDIT_KEY_PAGE_UP:
+            editor->cursor.row = editor->cursor.row > usable_rows ? editor->cursor.row - usable_rows : 0;
+            break;
+        case TEDIT_KEY_PAGE_DOWN:
+            editor->cursor.row += usable_rows;
+            if (editor->cursor.row >= editor->document.line_count) {
+                editor->cursor.row = editor->document.line_count == 0 ? 0 : editor->document.line_count - 1;
+            }
+            break;
+        case TEDIT_KEY_CTRL_HOME:
+            editor->cursor.row = 0;
+            editor->cursor.col = 0;
+            break;
+        case TEDIT_KEY_CTRL_END:
+            editor->cursor.row = editor->document.line_count == 0 ? 0 : editor->document.line_count - 1;
+            editor->cursor.col = editor->document.lines[editor->cursor.row].length;
             break;
         default:
             break;
@@ -118,7 +143,8 @@ void editor_handle_key(Editor *editor, int key) {
         return;
     }
 
-    if (key >= TEDIT_KEY_ARROW_LEFT && key <= TEDIT_KEY_ARROW_DOWN) {
+    if ((key >= TEDIT_KEY_ARROW_LEFT && key <= TEDIT_KEY_ARROW_DOWN) ||
+        (key >= TEDIT_KEY_HOME && key <= TEDIT_KEY_CTRL_END)) {
         move_cursor(editor, key);
         return;
     }

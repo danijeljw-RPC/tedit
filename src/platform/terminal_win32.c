@@ -18,6 +18,11 @@ int platform_read_key(Platform *platform) {
     return getchar();
 }
 
+int platform_key_from_escape_sequence(const char *sequence) {
+    (void)sequence;
+    return '\x1b';
+}
+
 void platform_write(Platform *platform, const char *data, int length) {
     (void)platform;
     fwrite(data, 1, (size_t)length, stdout);

@@ -7,6 +7,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/stat.h>
 #endif
 
 static char *copy_string(const char *value) {
@@ -259,6 +261,11 @@ bool document_save_as(Document *doc, const char *path) {
     char temp_path[4096];
     if (!make_temp_path(path, temp_path, sizeof(temp_path))) return false;
 
+#ifndef _WIN32
+    struct stat existing_stat;
+    bool preserve_mode = stat(path, &existing_stat) == 0;
+#endif
+
     FILE *file = fopen(temp_path, "wb");
     if (file == NULL) return false;
 
@@ -286,6 +293,12 @@ bool document_save_as(Document *doc, const char *path) {
         remove(temp_path);
         return false;
     }
+#ifndef _WIN32
+    if (preserve_mode && chmod(temp_path, existing_stat.st_mode & 0777) != 0) {
+        remove(temp_path);
+        return false;
+    }
+#endif
     if (!replace_file_with_temp(temp_path, path)) {
         remove(temp_path);
         return false;

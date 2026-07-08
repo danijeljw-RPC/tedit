@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 static void write_file_bytes(const char *path, const char *data, size_t length) {
     FILE *file = fopen(path, "wb");
     assert(file != NULL);
@@ -131,6 +136,27 @@ static void test_crlf_line_endings_are_preserved_on_save(void) {
     assert(memcmp(buffer, contents, length) == 0);
     remove(path);
 }
+
+#ifndef _WIN32
+static void test_save_preserves_existing_file_permissions(void) {
+    const char *path = "tedit_test_permissions.tmp";
+    write_file_bytes(path, "alpha\n", 6);
+    assert(chmod(path, 0600) == 0);
+
+    Document doc;
+    bool created_new = true;
+    struct stat st;
+    document_init(&doc);
+    assert(document_load_path(&doc, path, &created_new));
+    assert(created_new == false);
+    document_insert_char(&doc, 0, 5, '!');
+    assert(document_save(&doc));
+    assert(stat(path, &st) == 0);
+    assert((st.st_mode & 0777) == 0600);
+    document_destroy(&doc);
+    remove(path);
+}
+#endif
 
 static void test_screen_buffer_resize(void) {
     ScreenBuffer buffer;
@@ -275,6 +301,59 @@ static void test_active_line_horizontal_scroll_resets_when_row_changes(void) {
     editor_destroy(&editor);
 }
 
+static void test_home_end_move_within_line(void) {
+    Editor editor;
+    editor_init(&editor);
+    editor_enter_write_mode(&editor);
+    editor_handle_key(&editor, 'A');
+    editor_handle_key(&editor, 'B');
+    editor_handle_key(&editor, 'C');
+
+    editor_handle_key(&editor, TEDIT_KEY_HOME);
+    assert(editor.cursor.col == 0);
+    editor_handle_key(&editor, TEDIT_KEY_END);
+    assert(editor.cursor.col == 3);
+    editor_destroy(&editor);
+}
+
+static void test_page_and_document_navigation_keys(void) {
+    Editor editor;
+    editor_init(&editor);
+    editor_enter_write_mode(&editor);
+
+    for (int i = 0; i < 9; i++) {
+        editor_handle_key(&editor, (int)('a' + i));
+        if (i < 8) editor_handle_key(&editor, '\n');
+    }
+    editor.screen_rows = 5;
+    editor.screen_cols = 20;
+    editor.cursor.row = 0;
+    editor.cursor.col = 0;
+
+    editor_handle_key(&editor, TEDIT_KEY_PAGE_DOWN);
+    assert(editor.cursor.row == 3);
+    editor_handle_key(&editor, TEDIT_KEY_PAGE_UP);
+    assert(editor.cursor.row == 0);
+    editor_handle_key(&editor, TEDIT_KEY_CTRL_END);
+    assert(editor.cursor.row == editor.document.line_count - 1);
+    assert(editor.cursor.col == editor.document.lines[editor.cursor.row].length);
+    editor_handle_key(&editor, TEDIT_KEY_CTRL_HOME);
+    assert(editor.cursor.row == 0);
+    assert(editor.cursor.col == 0);
+    editor_destroy(&editor);
+}
+
+static void test_escape_sequence_navigation_mapping(void) {
+    assert(platform_key_from_escape_sequence("[H") == TEDIT_KEY_HOME);
+    assert(platform_key_from_escape_sequence("[F") == TEDIT_KEY_END);
+    assert(platform_key_from_escape_sequence("[5~") == TEDIT_KEY_PAGE_UP);
+    assert(platform_key_from_escape_sequence("[6~") == TEDIT_KEY_PAGE_DOWN);
+    assert(platform_key_from_escape_sequence("[1;5H") == TEDIT_KEY_CTRL_HOME);
+    assert(platform_key_from_escape_sequence("[1;5F") == TEDIT_KEY_CTRL_END);
+    assert(platform_key_from_escape_sequence("[3~") == TEDIT_KEY_DELETE);
+    assert(platform_key_from_escape_sequence("[unknown") == '\x1b');
+}
+
 int main(void) {
     test_basic_insert_delete();
     test_insert_newline_splits_line();
@@ -282,6 +361,9 @@ int main(void) {
     test_delete_at_line_end_joins_next_line();
     test_missing_path_loads_new_document();
     test_crlf_line_endings_are_preserved_on_save();
+#ifndef _WIN32
+    test_save_preserves_existing_file_permissions();
+#endif
     test_screen_buffer_resize();
     test_read_mode_blocks_printable_insert();
     test_w_enters_write_mode();
@@ -290,6 +372,9 @@ int main(void) {
     test_editor_open_existing_file_starts_read_mode();
     test_editor_open_missing_file_starts_write_mode();
     test_active_line_horizontal_scroll_resets_when_row_changes();
+    test_home_end_move_within_line();
+    test_page_and_document_navigation_keys();
+    test_escape_sequence_navigation_mapping();
 
     return 0;
 }
