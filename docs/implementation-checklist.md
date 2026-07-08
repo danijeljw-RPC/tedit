@@ -12,6 +12,10 @@ Before closing a milestone:
 - no accepted milestone feature is left as a Windows-only placeholder
 - save, encoding, and line-ending behavior are verified when touched
 
+On this macOS development machine, local closeout proves the active platform.
+Linux and Windows closeout evidence comes from the CI matrix unless those
+platforms are available locally.
+
 For each feature:
 
 - define state first

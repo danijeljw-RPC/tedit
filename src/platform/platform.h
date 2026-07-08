@@ -23,6 +23,12 @@ typedef struct Platform {
 #ifdef TEDIT_PLATFORM_POSIX
     void *original_termios;
 #endif
+#ifdef TEDIT_PLATFORM_WINDOWS
+    void *input_handle;
+    void *output_handle;
+    unsigned long original_input_mode;
+    unsigned long original_output_mode;
+#endif
 } Platform;
 
 bool platform_init(Platform *platform);

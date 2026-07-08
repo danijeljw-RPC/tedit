@@ -5,6 +5,12 @@ bool platform_init(Platform *platform) {
 #ifdef TEDIT_PLATFORM_POSIX
     platform->original_termios = 0;
 #endif
+#ifdef TEDIT_PLATFORM_WINDOWS
+    platform->input_handle = 0;
+    platform->output_handle = 0;
+    platform->original_input_mode = 0;
+    platform->original_output_mode = 0;
+#endif
     return true;
 }
 
