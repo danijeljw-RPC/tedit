@@ -82,7 +82,7 @@ If `path/to/file.txt` does not exist, the editor starts a new unsaved document i
 - `Alt+T`: open Tools menu
 - `Alt+H`: open Help menu
 
-Within an open menu, use arrow keys to navigate, Enter to run the selected command, and Escape to close the menu.
+On terminals where Option is not configured as Meta, press `Esc` and then the menu letter, for example `Esc` then `f` for File. Within an open menu, use arrow keys to navigate, Enter to run the selected command, and Escape to close the menu.
 
 ## MVP-003 Limitations
 

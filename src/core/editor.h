@@ -72,6 +72,7 @@ typedef struct {
     SyntaxDefinition syntax;
     SyntaxTokenLine syntax_scratch;
     EditorSettings settings;
+    bool menu_alt_prefix_pending;
     char *clipboard;
     size_t clipboard_length;
     EditorPromptMode prompt_mode;

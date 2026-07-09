@@ -909,6 +909,19 @@ static void test_menu_model_and_alt_shortcuts(void) {
     editor_destroy(&editor);
 }
 
+static void test_escape_then_letter_opens_menu_as_alt_prefix(void) {
+    Editor editor;
+    editor_init(&editor);
+
+    editor_handle_key(&editor, '\x1b');
+    assert(editor_menu_is_open(&editor) == 0);
+    editor_handle_key(&editor, 'f');
+
+    assert(editor_menu_is_open(&editor) == 1);
+    assert(editor_active_menu(&editor) == MENU_FILE);
+    editor_destroy(&editor);
+}
+
 static void test_open_and_save_as_prompts_without_command_line_path(void) {
     const char *existing_path = "tedit_test_prompt_existing.tmp";
     const char *missing_path = "tedit_test_prompt_missing.tmp";
@@ -1136,6 +1149,7 @@ int main(void) {
     test_home_end_move_within_line();
     test_page_and_document_navigation_keys();
     test_menu_model_and_alt_shortcuts();
+    test_escape_then_letter_opens_menu_as_alt_prefix();
     test_open_and_save_as_prompts_without_command_line_path();
     test_file_browser_lists_parent_dirs_then_files_and_activates();
     test_view_settings_and_tab_insertion_modes();

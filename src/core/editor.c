@@ -27,6 +27,7 @@ void editor_init(Editor *editor) {
     editor->settings.show_line_numbers = false;
     editor->settings.show_whitespace = false;
     editor->settings.tab_mode = EDITOR_TAB_LITERAL;
+    editor->menu_alt_prefix_pending = false;
     editor->clipboard = NULL;
     editor->clipboard_length = 0;
     editor->prompt_mode = EDITOR_PROMPT_NONE;
@@ -707,6 +708,22 @@ static void editor_execute_menu_command(Editor *editor, MenuCommandId command) {
     }
 }
 
+static bool editor_open_menu_from_plain_key(Editor *editor, int key) {
+    int alt_key = 0;
+    switch (key) {
+        case 'f': case 'F': alt_key = TEDIT_KEY_ALT_F; break;
+        case 'e': case 'E': alt_key = TEDIT_KEY_ALT_E; break;
+        case 's': case 'S': alt_key = TEDIT_KEY_ALT_S; break;
+        case 'v': case 'V': alt_key = TEDIT_KEY_ALT_V; break;
+        case 't': case 'T': alt_key = TEDIT_KEY_ALT_T; break;
+        case 'h': case 'H': alt_key = TEDIT_KEY_ALT_H; break;
+        default: return false;
+    }
+    if (!menu_bar_open_shortcut(&editor->menu_bar, alt_key)) return false;
+    snprintf(editor->status, sizeof(editor->status), "Menu: %s", menu_bar_menu_label(&editor->menu_bar, editor->menu_bar.active_menu));
+    return true;
+}
+
 static void editor_finish_prompt(Editor *editor) {
     if (editor->prompt_mode == EDITOR_PROMPT_FIND) {
         if (editor_search_set_query(editor, editor->prompt_buffer)) {
@@ -784,7 +801,7 @@ void editor_handle_key(Editor *editor, int key) {
         return;
     }
 
-    if (menu_bar_open_shortcut(&editor->menu_bar, key)) {
+    if (editor->menu_bar.open && menu_bar_open_shortcut(&editor->menu_bar, key)) {
         snprintf(editor->status, sizeof(editor->status), "Menu: %s", menu_bar_menu_label(&editor->menu_bar, editor->menu_bar.active_menu));
         return;
     }
@@ -792,6 +809,7 @@ void editor_handle_key(Editor *editor, int key) {
     if (editor->menu_bar.open) {
         if (key == '\x1b') {
             menu_bar_close(&editor->menu_bar);
+            editor->menu_alt_prefix_pending = false;
             snprintf(editor->status, sizeof(editor->status), "Menu closed");
             return;
         }
@@ -802,6 +820,22 @@ void editor_handle_key(Editor *editor, int key) {
             return;
         }
         menu_bar_handle_key(&editor->menu_bar, key);
+        return;
+    }
+
+    if (editor->menu_alt_prefix_pending) {
+        editor->menu_alt_prefix_pending = false;
+        if (editor_open_menu_from_plain_key(editor, key)) return;
+    }
+
+    if (key == '\x1b') {
+        editor->menu_alt_prefix_pending = true;
+        snprintf(editor->status, sizeof(editor->status), "Menu shortcut: f/e/s/v/t/h");
+        return;
+    }
+
+    if (menu_bar_open_shortcut(&editor->menu_bar, key)) {
+        snprintf(editor->status, sizeof(editor->status), "Menu: %s", menu_bar_menu_label(&editor->menu_bar, editor->menu_bar.active_menu));
         return;
     }
 
