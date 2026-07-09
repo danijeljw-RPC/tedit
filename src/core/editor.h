@@ -3,7 +3,10 @@
 
 #include "document.h"
 #include "search.h"
+#include "syntax.h"
 #include "undo.h"
+#include "ui/file_browser.h"
+#include "ui/menu.h"
 
 struct Platform;
 
@@ -34,8 +37,22 @@ typedef enum {
     EDITOR_PROMPT_FIND,
     EDITOR_PROMPT_REPLACE_CURRENT,
     EDITOR_PROMPT_REPLACE_ALL,
-    EDITOR_PROMPT_CONFIRM_REPLACE_ALL
+    EDITOR_PROMPT_CONFIRM_REPLACE_ALL,
+    EDITOR_PROMPT_OPEN,
+    EDITOR_PROMPT_SAVE_AS
 } EditorPromptMode;
+
+typedef enum {
+    EDITOR_TAB_LITERAL,
+    EDITOR_TAB_TWO_SPACES,
+    EDITOR_TAB_FOUR_SPACES
+} EditorTabMode;
+
+typedef struct {
+    bool show_line_numbers;
+    bool show_whitespace;
+    EditorTabMode tab_mode;
+} EditorSettings;
 
 typedef struct {
     bool active;
@@ -50,6 +67,11 @@ typedef struct {
     UndoStack undo;
     SearchState search;
     Selection selection;
+    MenuBar menu_bar;
+    FileBrowser file_browser;
+    SyntaxDefinition syntax;
+    SyntaxTokenLine syntax_scratch;
+    EditorSettings settings;
     char *clipboard;
     size_t clipboard_length;
     EditorPromptMode prompt_mode;
@@ -79,5 +101,14 @@ void editor_clear_selection(Editor *editor);
 int editor_has_selection(const Editor *editor);
 const char *editor_clipboard_text(const Editor *editor);
 EditorHighlight editor_highlight_at(const Editor *editor, size_t row, size_t col);
+void editor_start_open_prompt(Editor *editor);
+void editor_start_save_as_prompt(Editor *editor);
+int editor_save_as_path(Editor *editor, const char *path);
+void editor_toggle_line_numbers(Editor *editor);
+void editor_toggle_whitespace(Editor *editor);
+void editor_set_tab_mode(Editor *editor, EditorTabMode mode);
+int editor_menu_is_open(const Editor *editor);
+MenuId editor_active_menu(const Editor *editor);
+SyntaxTokenType editor_syntax_token_at(Editor *editor, size_t row, size_t col);
 
 #endif

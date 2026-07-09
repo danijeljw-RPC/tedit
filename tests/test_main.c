@@ -1,12 +1,20 @@
 #include "core/document.h"
 #include "core/editor.h"
+#include "core/syntax.h"
 #include "platform/platform.h"
 #include "renderer/screen_buffer.h"
+#include "ui/file_browser.h"
+#include "ui/menu.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#endif
 
 #ifndef _WIN32
 #include <sys/stat.h>
@@ -25,6 +33,22 @@ static void read_file_bytes(const char *path, char *buffer, size_t capacity, siz
     assert(file != NULL);
     *length = fread(buffer, 1, capacity, file);
     assert(fclose(file) == 0);
+}
+
+static void make_test_dir(const char *path) {
+#ifdef _WIN32
+    assert(_mkdir(path) == 0);
+#else
+    assert(mkdir(path, 0700) == 0);
+#endif
+}
+
+static void remove_test_dir(const char *path) {
+#ifdef _WIN32
+    if (_rmdir(path) != 0) assert(errno == ENOENT);
+#else
+    if (rmdir(path) != 0) assert(errno == ENOENT);
+#endif
 }
 
 static void test_basic_insert_delete(void) {
@@ -851,6 +875,201 @@ static void test_page_and_document_navigation_keys(void) {
     editor_destroy(&editor);
 }
 
+static void test_menu_model_and_alt_shortcuts(void) {
+    MenuBar menu;
+    menu_bar_init(&menu);
+    assert(menu_bar_menu_count(&menu) == 6);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_FILE), "File") == 0);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_EDIT), "Edit") == 0);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_SEARCH), "Search") == 0);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_VIEW), "View") == 0);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_TOOLS), "Tools") == 0);
+    assert(strcmp(menu_bar_menu_label(&menu, MENU_HELP), "Help") == 0);
+
+    Editor editor;
+    editor_init(&editor);
+    editor_handle_key(&editor, TEDIT_KEY_ALT_F);
+    assert(editor_menu_is_open(&editor) == 1);
+    assert(editor_active_menu(&editor) == MENU_FILE);
+    editor_handle_key(&editor, TEDIT_KEY_ARROW_DOWN);
+    assert(menu_bar_active_item(&editor.menu_bar) == 1);
+    editor_handle_key(&editor, '\x1b');
+    assert(editor_menu_is_open(&editor) == 0);
+
+    editor_handle_key(&editor, TEDIT_KEY_ALT_E);
+    assert(editor_active_menu(&editor) == MENU_EDIT);
+    editor_handle_key(&editor, TEDIT_KEY_ALT_S);
+    assert(editor_active_menu(&editor) == MENU_SEARCH);
+    editor_handle_key(&editor, TEDIT_KEY_ALT_V);
+    assert(editor_active_menu(&editor) == MENU_VIEW);
+    editor_handle_key(&editor, TEDIT_KEY_ALT_T);
+    assert(editor_active_menu(&editor) == MENU_TOOLS);
+    editor_handle_key(&editor, TEDIT_KEY_ALT_H);
+    assert(editor_active_menu(&editor) == MENU_HELP);
+    editor_destroy(&editor);
+}
+
+static void test_open_and_save_as_prompts_without_command_line_path(void) {
+    const char *existing_path = "tedit_test_prompt_existing.tmp";
+    const char *missing_path = "tedit_test_prompt_missing.tmp";
+    const char *save_path = "tedit_test_prompt_save_as.tmp";
+    char buffer[32];
+    size_t length = 0;
+    remove(existing_path);
+    remove(missing_path);
+    remove(save_path);
+    write_file_bytes(existing_path, "loaded\n", 7);
+
+    Editor editor;
+    editor_init(&editor);
+    assert(editor.document.path == NULL);
+    editor_start_open_prompt(&editor);
+    for (size_t i = 0; existing_path[i] != '\0'; i++) editor_handle_key(&editor, existing_path[i]);
+    editor_handle_key(&editor, '\n');
+    assert(editor.document.path != NULL);
+    assert(strcmp(editor.document.path, existing_path) == 0);
+    assert(editor.mode == EDITOR_MODE_READ);
+    assert(strcmp(editor.document.lines[0].data, "loaded") == 0);
+
+    editor_start_open_prompt(&editor);
+    for (size_t i = 0; missing_path[i] != '\0'; i++) editor_handle_key(&editor, missing_path[i]);
+    editor_handle_key(&editor, '\n');
+    assert(editor.mode == EDITOR_MODE_WRITE);
+    assert(strcmp(editor.document.path, missing_path) == 0);
+    assert(editor.document.lines[0].length == 0);
+
+    editor_destroy(&editor);
+    editor_init(&editor);
+    editor_enter_write_mode(&editor);
+    editor_handle_key(&editor, 'O');
+    editor_handle_key(&editor, 'K');
+    editor_start_save_as_prompt(&editor);
+    for (size_t i = 0; save_path[i] != '\0'; i++) editor_handle_key(&editor, save_path[i]);
+    editor_handle_key(&editor, '\n');
+    assert(editor.document.path != NULL);
+    assert(strcmp(editor.document.path, save_path) == 0);
+    assert(editor.document.dirty == false);
+    read_file_bytes(save_path, buffer, sizeof(buffer), &length);
+    assert(length == 2);
+    assert(memcmp(buffer, "OK", 2) == 0);
+    editor_destroy(&editor);
+
+    remove(existing_path);
+    remove(missing_path);
+    remove(save_path);
+}
+
+static void test_file_browser_lists_parent_dirs_then_files_and_activates(void) {
+    const char *root = "tedit_test_browser.tmp";
+    const char *dir_path = "tedit_test_browser.tmp/a_dir";
+    const char *file_path = "tedit_test_browser.tmp/b_file.txt";
+    remove(file_path);
+    remove_test_dir(dir_path);
+    remove_test_dir(root);
+    make_test_dir(root);
+    make_test_dir(dir_path);
+    write_file_bytes(file_path, "x", 1);
+
+    FileBrowser browser;
+    file_browser_init(&browser);
+    assert(file_browser_open(&browser, root));
+    assert(browser.entry_count == 3);
+    assert(browser.entries[0].kind == FILE_BROWSER_ENTRY_PARENT);
+    assert(strcmp(browser.entries[1].name, "a_dir") == 0);
+    assert(browser.entries[1].kind == FILE_BROWSER_ENTRY_DIRECTORY);
+    assert(strcmp(browser.entries[2].name, "b_file.txt") == 0);
+    assert(browser.entries[2].kind == FILE_BROWSER_ENTRY_FILE);
+
+    browser.selected = 1;
+    FileBrowserActivation activation = file_browser_activate_selected(&browser);
+    assert(activation.kind == FILE_BROWSER_ACTIVATE_DIRECTORY);
+    assert(strstr(activation.path, "a_dir") != NULL);
+    file_browser_activation_destroy(&activation);
+
+    browser.selected = 2;
+    activation = file_browser_activate_selected(&browser);
+    assert(activation.kind == FILE_BROWSER_ACTIVATE_FILE);
+    assert(strstr(activation.path, "b_file.txt") != NULL);
+    file_browser_activation_destroy(&activation);
+    file_browser_destroy(&browser);
+
+    remove(file_path);
+    remove_test_dir(dir_path);
+    remove_test_dir(root);
+}
+
+static void test_view_settings_and_tab_insertion_modes(void) {
+    Editor editor;
+    editor_init(&editor);
+    assert(editor.settings.show_line_numbers == false);
+    assert(editor.settings.show_whitespace == false);
+    assert(editor.settings.tab_mode == EDITOR_TAB_LITERAL);
+
+    editor_toggle_line_numbers(&editor);
+    editor_toggle_whitespace(&editor);
+    assert(editor.settings.show_line_numbers == true);
+    assert(editor.settings.show_whitespace == true);
+
+    editor_enter_write_mode(&editor);
+    editor_set_tab_mode(&editor, EDITOR_TAB_TWO_SPACES);
+    editor_handle_key(&editor, '\t');
+    assert(editor.document.lines[0].length == 2);
+    assert(memcmp(editor.document.lines[0].data, "  ", 2) == 0);
+
+    editor_set_tab_mode(&editor, EDITOR_TAB_FOUR_SPACES);
+    editor_handle_key(&editor, '\t');
+    assert(editor.document.lines[0].length == 6);
+    assert(memcmp(editor.document.lines[0].data, "      ", 6) == 0);
+
+    editor_set_tab_mode(&editor, EDITOR_TAB_LITERAL);
+    editor_handle_key(&editor, '\t');
+    assert(editor.document.lines[0].length == 7);
+    assert(editor.document.lines[0].data[6] == '\t');
+
+    editor.mode = EDITOR_MODE_READ;
+    editor_handle_key(&editor, '\t');
+    assert(editor.document.lines[0].length == 7);
+    editor_destroy(&editor);
+}
+
+static void test_builtin_syntax_highlighter_is_renderer_independent(void) {
+    SyntaxDefinition definition;
+    SyntaxTokenLine tokens;
+    syntax_definition_init(&definition);
+    syntax_definition_init_builtin_c(&definition);
+    syntax_token_line_init(&tokens);
+
+    assert(syntax_highlight_line(&definition, "int main() { return 42; // todo\n", 32, &tokens));
+    assert(syntax_token_line_type_at(&tokens, 0) == SYNTAX_TOKEN_KEYWORD);
+    assert(syntax_token_line_type_at(&tokens, 20) == SYNTAX_TOKEN_NUMBER);
+    assert(syntax_token_line_type_at(&tokens, 24) == SYNTAX_TOKEN_COMMENT);
+
+    syntax_token_line_destroy(&tokens);
+    syntax_definition_destroy(&definition);
+}
+
+static void test_nano_syntax_importer_tier_one(void) {
+    const char *nano =
+        "syntax \"c\" \"\\\\.c$\"\n"
+        "color green \"int\"\n"
+        "icolor brightred \"todo\"\n";
+    SyntaxDefinition definition;
+    SyntaxTokenLine tokens;
+    syntax_definition_init(&definition);
+    assert(syntax_definition_load_nano_text(&definition, nano));
+    assert(strcmp(definition.name, "c") == 0);
+    assert(syntax_definition_matches_filename(&definition, "main.c") == true);
+    assert(syntax_definition_matches_filename(&definition, "main.h") == false);
+
+    syntax_token_line_init(&tokens);
+    assert(syntax_highlight_line(&definition, "TODO int", 8, &tokens));
+    assert(syntax_token_line_type_at(&tokens, 0) == SYNTAX_TOKEN_TODO);
+    assert(syntax_token_line_type_at(&tokens, 5) == SYNTAX_TOKEN_KEYWORD);
+
+    syntax_token_line_destroy(&tokens);
+    syntax_definition_destroy(&definition);
+}
+
 static void test_escape_sequence_navigation_mapping(void) {
     assert(platform_key_from_escape_sequence("[H") == TEDIT_KEY_HOME);
     assert(platform_key_from_escape_sequence("[F") == TEDIT_KEY_END);
@@ -862,6 +1081,12 @@ static void test_escape_sequence_navigation_mapping(void) {
     assert(platform_key_from_escape_sequence("[1;2B") == TEDIT_KEY_SHIFT_ARROW_DOWN);
     assert(platform_key_from_escape_sequence("[1;2C") == TEDIT_KEY_SHIFT_ARROW_RIGHT);
     assert(platform_key_from_escape_sequence("[1;2D") == TEDIT_KEY_SHIFT_ARROW_LEFT);
+    assert(platform_key_from_escape_sequence("f") == TEDIT_KEY_ALT_F);
+    assert(platform_key_from_escape_sequence("e") == TEDIT_KEY_ALT_E);
+    assert(platform_key_from_escape_sequence("s") == TEDIT_KEY_ALT_S);
+    assert(platform_key_from_escape_sequence("v") == TEDIT_KEY_ALT_V);
+    assert(platform_key_from_escape_sequence("t") == TEDIT_KEY_ALT_T);
+    assert(platform_key_from_escape_sequence("h") == TEDIT_KEY_ALT_H);
     assert(platform_key_from_escape_sequence("[3~") == TEDIT_KEY_DELETE);
     assert(platform_key_from_escape_sequence("q") == TEDIT_KEY_CTRL_Q);
     assert(platform_key_from_escape_sequence("Q") == TEDIT_KEY_CTRL_Q);
@@ -910,6 +1135,12 @@ int main(void) {
     test_active_line_horizontal_scroll_resets_when_row_changes();
     test_home_end_move_within_line();
     test_page_and_document_navigation_keys();
+    test_menu_model_and_alt_shortcuts();
+    test_open_and_save_as_prompts_without_command_line_path();
+    test_file_browser_lists_parent_dirs_then_files_and_activates();
+    test_view_settings_and_tab_insertion_modes();
+    test_builtin_syntax_highlighter_is_renderer_independent();
+    test_nano_syntax_importer_tier_one();
     test_escape_sequence_navigation_mapping();
 
     return 0;

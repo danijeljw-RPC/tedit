@@ -19,6 +19,14 @@ void editor_init(Editor *editor) {
     editor->selection.anchor.row = 0;
     editor->selection.anchor.col = 0;
     editor->selection.cursor = editor->selection.anchor;
+    menu_bar_init(&editor->menu_bar);
+    file_browser_init(&editor->file_browser);
+    syntax_definition_init(&editor->syntax);
+    syntax_definition_init_builtin_c(&editor->syntax);
+    syntax_token_line_init(&editor->syntax_scratch);
+    editor->settings.show_line_numbers = false;
+    editor->settings.show_whitespace = false;
+    editor->settings.tab_mode = EDITOR_TAB_LITERAL;
     editor->clipboard = NULL;
     editor->clipboard_length = 0;
     editor->prompt_mode = EDITOR_PROMPT_NONE;
@@ -32,10 +40,28 @@ void editor_init(Editor *editor) {
 }
 
 void editor_destroy(Editor *editor) {
+    syntax_token_line_destroy(&editor->syntax_scratch);
+    syntax_definition_destroy(&editor->syntax);
+    file_browser_destroy(&editor->file_browser);
     search_state_destroy(&editor->search);
     undo_stack_destroy(&editor->undo);
     free(editor->clipboard);
     document_destroy(&editor->document);
+}
+
+static void editor_reset_after_open(Editor *editor) {
+    editor->cursor.row = 0;
+    editor->cursor.col = 0;
+    editor->viewport.top_row = 0;
+    editor->viewport.active_line_left_col = 0;
+    editor->viewport.active_row = 0;
+    undo_stack_destroy(&editor->undo);
+    undo_stack_init(&editor->undo);
+    search_clear(&editor->search);
+    editor->selection.active = false;
+    editor->selection.anchor.row = 0;
+    editor->selection.anchor.col = 0;
+    editor->selection.cursor = editor->selection.anchor;
 }
 
 int editor_open(Editor *editor, const char *path) {
@@ -44,8 +70,18 @@ int editor_open(Editor *editor, const char *path) {
         snprintf(editor->status, sizeof(editor->status), "Could not open %s", path);
         return 0;
     }
+    editor_reset_after_open(editor);
     editor->mode = created_new ? EDITOR_MODE_WRITE : EDITOR_MODE_READ;
     snprintf(editor->status, sizeof(editor->status), "%s %s", created_new ? "New file" : "Opened", path);
+    return 1;
+}
+
+int editor_save_as_path(Editor *editor, const char *path) {
+    if (!document_save_as(&editor->document, path)) {
+        snprintf(editor->status, sizeof(editor->status), "Save as failed");
+        return 0;
+    }
+    snprintf(editor->status, sizeof(editor->status), "Saved as %s", path);
     return 1;
 }
 
@@ -61,7 +97,8 @@ static DocumentPosition cursor_to_position(Cursor cursor);
 int editor_has_selection(const Editor *editor);
 
 void editor_update_viewport(Editor *editor) {
-    int usable_rows = editor->screen_rows - 2;
+    int menu_rows = editor->menu_bar.open ? 2 : 1;
+    int usable_rows = editor->screen_rows - 2 - menu_rows;
     if (usable_rows < 1) usable_rows = 1;
 
     if (editor->viewport.active_row != editor->cursor.row) {
@@ -77,7 +114,17 @@ void editor_update_viewport(Editor *editor) {
         editor->viewport.top_row = editor->cursor.row - (size_t)usable_rows + 1;
     }
 
-    size_t visible_cols = editor->screen_cols > 1 ? (size_t)editor->screen_cols : 1;
+    int gutter_width = 0;
+    if (editor->settings.show_line_numbers) {
+        size_t line_count = editor->document.line_count;
+        gutter_width = 3;
+        while (line_count >= 10) {
+            line_count /= 10;
+            gutter_width++;
+        }
+    }
+    int text_cols = editor->screen_cols - gutter_width;
+    size_t visible_cols = text_cols > 1 ? (size_t)text_cols : 1;
     if (editor->cursor.col < editor->viewport.active_line_left_col) {
         editor->viewport.active_line_left_col = editor->cursor.col;
     }
@@ -167,6 +214,48 @@ static void editor_start_prompt(Editor *editor, EditorPromptMode mode, const cha
     editor->prompt_mode = mode;
     editor->prompt_buffer[0] = '\0';
     snprintf(editor->status, sizeof(editor->status), "%s", status);
+}
+
+void editor_start_open_prompt(Editor *editor) {
+    editor_start_prompt(editor, EDITOR_PROMPT_OPEN, "Open:");
+}
+
+void editor_start_save_as_prompt(Editor *editor) {
+    editor_start_prompt(editor, EDITOR_PROMPT_SAVE_AS, "Save as:");
+}
+
+void editor_toggle_line_numbers(Editor *editor) {
+    editor->settings.show_line_numbers = !editor->settings.show_line_numbers;
+    snprintf(editor->status, sizeof(editor->status), "Line numbers %s", editor->settings.show_line_numbers ? "on" : "off");
+}
+
+void editor_toggle_whitespace(Editor *editor) {
+    editor->settings.show_whitespace = !editor->settings.show_whitespace;
+    snprintf(editor->status, sizeof(editor->status), "Whitespace %s", editor->settings.show_whitespace ? "on" : "off");
+}
+
+void editor_set_tab_mode(Editor *editor, EditorTabMode mode) {
+    editor->settings.tab_mode = mode;
+    if (mode == EDITOR_TAB_TWO_SPACES) snprintf(editor->status, sizeof(editor->status), "Tab inserts 2 spaces");
+    else if (mode == EDITOR_TAB_FOUR_SPACES) snprintf(editor->status, sizeof(editor->status), "Tab inserts 4 spaces");
+    else snprintf(editor->status, sizeof(editor->status), "Tab inserts literal tab");
+}
+
+int editor_menu_is_open(const Editor *editor) {
+    return editor->menu_bar.open ? 1 : 0;
+}
+
+MenuId editor_active_menu(const Editor *editor) {
+    return menu_bar_active_menu(&editor->menu_bar);
+}
+
+SyntaxTokenType editor_syntax_token_at(Editor *editor, size_t row, size_t col) {
+    if (row >= editor->document.line_count) return SYNTAX_TOKEN_NORMAL;
+    const TextLine *line = &editor->document.lines[row];
+    if (!syntax_highlight_line(&editor->syntax, line->data == NULL ? "" : line->data, line->length, &editor->syntax_scratch)) {
+        return SYNTAX_TOKEN_NORMAL;
+    }
+    return syntax_token_line_type_at(&editor->syntax_scratch, col);
 }
 
 static DocumentPosition cursor_to_position(Cursor cursor) {
@@ -551,6 +640,73 @@ int editor_replace_all_confirmed(Editor *editor, const char *replacement) {
     return replace_count;
 }
 
+static void editor_execute_menu_command(Editor *editor, MenuCommandId command) {
+    switch (command) {
+        case MENU_COMMAND_OPEN:
+            editor_start_open_prompt(editor);
+            break;
+        case MENU_COMMAND_SAVE:
+            if (document_save(&editor->document)) snprintf(editor->status, sizeof(editor->status), "Saved");
+            else snprintf(editor->status, sizeof(editor->status), "Save failed");
+            break;
+        case MENU_COMMAND_SAVE_AS:
+            editor_start_save_as_prompt(editor);
+            break;
+        case MENU_COMMAND_QUIT:
+            editor->should_quit = 1;
+            break;
+        case MENU_COMMAND_UNDO:
+            if (editor->mode == EDITOR_MODE_WRITE) editor_undo(editor);
+            else snprintf(editor->status, sizeof(editor->status), "READ mode - press w to edit");
+            break;
+        case MENU_COMMAND_REDO:
+            if (editor->mode == EDITOR_MODE_WRITE) editor_redo(editor);
+            else snprintf(editor->status, sizeof(editor->status), "READ mode - press w to edit");
+            break;
+        case MENU_COMMAND_COPY:
+            editor_copy_selection(editor);
+            break;
+        case MENU_COMMAND_CUT:
+            if (editor->mode == EDITOR_MODE_WRITE) editor_cut_selection(editor);
+            else snprintf(editor->status, sizeof(editor->status), "READ mode - press w to edit");
+            break;
+        case MENU_COMMAND_PASTE:
+            if (editor->mode == EDITOR_MODE_WRITE) editor_paste_clipboard(editor);
+            else snprintf(editor->status, sizeof(editor->status), "READ mode - press w to edit");
+            break;
+        case MENU_COMMAND_FIND:
+            editor_start_prompt(editor, EDITOR_PROMPT_FIND, "Find:");
+            break;
+        case MENU_COMMAND_FIND_NEXT:
+            editor_find_next(editor);
+            break;
+        case MENU_COMMAND_FIND_PREVIOUS:
+            editor_find_previous(editor);
+            break;
+        case MENU_COMMAND_TOGGLE_LINE_NUMBERS:
+            editor_toggle_line_numbers(editor);
+            break;
+        case MENU_COMMAND_TOGGLE_WHITESPACE:
+            editor_toggle_whitespace(editor);
+            break;
+        case MENU_COMMAND_TAB_LITERAL:
+            editor_set_tab_mode(editor, EDITOR_TAB_LITERAL);
+            break;
+        case MENU_COMMAND_TAB_TWO_SPACES:
+            editor_set_tab_mode(editor, EDITOR_TAB_TWO_SPACES);
+            break;
+        case MENU_COMMAND_TAB_FOUR_SPACES:
+            editor_set_tab_mode(editor, EDITOR_TAB_FOUR_SPACES);
+            break;
+        case MENU_COMMAND_ABOUT:
+            snprintf(editor->status, sizeof(editor->status), "TEdit MVP-003");
+            break;
+        case MENU_COMMAND_NONE:
+        default:
+            break;
+    }
+}
+
 static void editor_finish_prompt(Editor *editor) {
     if (editor->prompt_mode == EDITOR_PROMPT_FIND) {
         if (editor_search_set_query(editor, editor->prompt_buffer)) {
@@ -569,6 +725,16 @@ static void editor_finish_prompt(Editor *editor) {
         editor->prompt_buffer[0] = '\0';
         editor->prompt_mode = EDITOR_PROMPT_CONFIRM_REPLACE_ALL;
         snprintf(editor->status, sizeof(editor->status), "Replace all? y/n");
+        return;
+    }
+    if (editor->prompt_mode == EDITOR_PROMPT_OPEN) {
+        editor_open(editor, editor->prompt_buffer);
+        editor->prompt_mode = EDITOR_PROMPT_NONE;
+        return;
+    }
+    if (editor->prompt_mode == EDITOR_PROMPT_SAVE_AS) {
+        editor_save_as_path(editor, editor->prompt_buffer);
+        editor->prompt_mode = EDITOR_PROMPT_NONE;
         return;
     }
 }
@@ -615,6 +781,27 @@ void editor_handle_key(Editor *editor, int key) {
 
     if (editor->prompt_mode != EDITOR_PROMPT_NONE) {
         editor_handle_prompt_key(editor, key);
+        return;
+    }
+
+    if (menu_bar_open_shortcut(&editor->menu_bar, key)) {
+        snprintf(editor->status, sizeof(editor->status), "Menu: %s", menu_bar_menu_label(&editor->menu_bar, editor->menu_bar.active_menu));
+        return;
+    }
+
+    if (editor->menu_bar.open) {
+        if (key == '\x1b') {
+            menu_bar_close(&editor->menu_bar);
+            snprintf(editor->status, sizeof(editor->status), "Menu closed");
+            return;
+        }
+        if (key == '\r' || key == '\n') {
+            MenuCommandId command = menu_bar_current_command(&editor->menu_bar);
+            menu_bar_close(&editor->menu_bar);
+            editor_execute_menu_command(editor, command);
+            return;
+        }
+        menu_bar_handle_key(&editor->menu_bar, key);
         return;
     }
 
@@ -714,7 +901,13 @@ void editor_handle_key(Editor *editor, int key) {
     }
 
     if (key == '\t') {
-        editor_insert_text(editor, "\t", 1, false);
+        if (editor->settings.tab_mode == EDITOR_TAB_TWO_SPACES) {
+            editor_insert_text(editor, "  ", 2, false);
+        } else if (editor->settings.tab_mode == EDITOR_TAB_FOUR_SPACES) {
+            editor_insert_text(editor, "    ", 4, false);
+        } else {
+            editor_insert_text(editor, "\t", 1, false);
+        }
         return;
     }
 

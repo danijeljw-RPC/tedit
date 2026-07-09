@@ -14,6 +14,11 @@ static bool shift_pressed(const KEY_EVENT_RECORD *event) {
     return (event->dwControlKeyState & SHIFT_PRESSED) != 0;
 }
 
+static bool alt_pressed(const KEY_EVENT_RECORD *event) {
+    DWORD state = event->dwControlKeyState;
+    return (state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) != 0;
+}
+
 static int key_from_record(const KEY_EVENT_RECORD *event) {
     if (!event->bKeyDown) return 0;
 
@@ -35,6 +40,17 @@ static int key_from_record(const KEY_EVENT_RECORD *event) {
 
     WCHAR ch = event->uChar.UnicodeChar;
     if (ch == 0) return 0;
+    if (alt_pressed(event)) {
+        switch (ch) {
+            case L'f': case L'F': return TEDIT_KEY_ALT_F;
+            case L'e': case L'E': return TEDIT_KEY_ALT_E;
+            case L's': case L'S': return TEDIT_KEY_ALT_S;
+            case L'v': case L'V': return TEDIT_KEY_ALT_V;
+            case L't': case L'T': return TEDIT_KEY_ALT_T;
+            case L'h': case L'H': return TEDIT_KEY_ALT_H;
+            default: break;
+        }
+    }
     if (ch == L'\t') return '\t';
     if (ch == 17) return TEDIT_KEY_CTRL_Q;
     if (ch == 19) return TEDIT_KEY_CTRL_S;
@@ -116,6 +132,12 @@ int platform_key_from_escape_sequence(const char *sequence) {
     if (strcmp(sequence, "[1;2B") == 0) return TEDIT_KEY_SHIFT_ARROW_DOWN;
     if (strcmp(sequence, "[1;2C") == 0) return TEDIT_KEY_SHIFT_ARROW_RIGHT;
     if (strcmp(sequence, "[1;2D") == 0) return TEDIT_KEY_SHIFT_ARROW_LEFT;
+    if (strcmp(sequence, "f") == 0 || strcmp(sequence, "F") == 0) return TEDIT_KEY_ALT_F;
+    if (strcmp(sequence, "e") == 0 || strcmp(sequence, "E") == 0) return TEDIT_KEY_ALT_E;
+    if (strcmp(sequence, "s") == 0 || strcmp(sequence, "S") == 0) return TEDIT_KEY_ALT_S;
+    if (strcmp(sequence, "v") == 0 || strcmp(sequence, "V") == 0) return TEDIT_KEY_ALT_V;
+    if (strcmp(sequence, "t") == 0 || strcmp(sequence, "T") == 0) return TEDIT_KEY_ALT_T;
+    if (strcmp(sequence, "h") == 0 || strcmp(sequence, "H") == 0) return TEDIT_KEY_ALT_H;
     if (strcmp(sequence, "[H") == 0 || strcmp(sequence, "[1~") == 0) return TEDIT_KEY_HOME;
     if (strcmp(sequence, "[F") == 0 || strcmp(sequence, "[4~") == 0) return TEDIT_KEY_END;
     if (strcmp(sequence, "[3~") == 0) return TEDIT_KEY_DELETE;

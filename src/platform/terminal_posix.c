@@ -57,6 +57,12 @@ int platform_key_from_escape_sequence(const char *sequence) {
     if (strcmp(sequence, "[1;2B") == 0) return TEDIT_KEY_SHIFT_ARROW_DOWN;
     if (strcmp(sequence, "[1;2C") == 0) return TEDIT_KEY_SHIFT_ARROW_RIGHT;
     if (strcmp(sequence, "[1;2D") == 0) return TEDIT_KEY_SHIFT_ARROW_LEFT;
+    if (strcmp(sequence, "f") == 0 || strcmp(sequence, "F") == 0) return TEDIT_KEY_ALT_F;
+    if (strcmp(sequence, "e") == 0 || strcmp(sequence, "E") == 0) return TEDIT_KEY_ALT_E;
+    if (strcmp(sequence, "s") == 0 || strcmp(sequence, "S") == 0) return TEDIT_KEY_ALT_S;
+    if (strcmp(sequence, "v") == 0 || strcmp(sequence, "V") == 0) return TEDIT_KEY_ALT_V;
+    if (strcmp(sequence, "t") == 0 || strcmp(sequence, "T") == 0) return TEDIT_KEY_ALT_T;
+    if (strcmp(sequence, "h") == 0 || strcmp(sequence, "H") == 0) return TEDIT_KEY_ALT_H;
     if (strcmp(sequence, "[H") == 0 || strcmp(sequence, "[1~") == 0) return TEDIT_KEY_HOME;
     if (strcmp(sequence, "[F") == 0 || strcmp(sequence, "[4~") == 0) return TEDIT_KEY_END;
     if (strcmp(sequence, "[3~") == 0) return TEDIT_KEY_DELETE;

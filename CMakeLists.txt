@@ -16,6 +16,7 @@ add_executable(tedit
     src/core/editor.c
     src/core/keymap.c
     src/core/search.c
+    src/core/syntax.c
     src/core/undo.c
     src/platform/platform.c
     src/platform/terminal_posix.c
@@ -23,6 +24,8 @@ add_executable(tedit
     src/renderer/ansi_renderer.c
     src/renderer/screen_buffer.c
     src/ui/editor_view.c
+    src/ui/file_browser.c
+    src/ui/menu.c
     src/ui/status_bar.c
 )
 
@@ -42,12 +45,15 @@ add_executable(tedit_tests
     src/core/editor.c
     src/core/keymap.c
     src/core/search.c
+    src/core/syntax.c
     src/core/undo.c
     src/platform/platform.c
     src/platform/terminal_posix.c
     src/platform/terminal_win32.c
     src/renderer/ansi_renderer.c
     src/renderer/screen_buffer.c
+    src/ui/file_browser.c
+    src/ui/menu.c
 )
 
 target_include_directories(tedit_tests PRIVATE src)

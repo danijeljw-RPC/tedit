@@ -32,6 +32,12 @@
 #define TEDIT_KEY_SHIFT_ARROW_RIGHT 1012
 #define TEDIT_KEY_SHIFT_ARROW_UP 1013
 #define TEDIT_KEY_SHIFT_ARROW_DOWN 1014
+#define TEDIT_KEY_ALT_F 1015
+#define TEDIT_KEY_ALT_E 1016
+#define TEDIT_KEY_ALT_S 1017
+#define TEDIT_KEY_ALT_V 1018
+#define TEDIT_KEY_ALT_T 1019
+#define TEDIT_KEY_ALT_H 1020
 
 typedef struct Platform {
     int raw_mode_enabled;
