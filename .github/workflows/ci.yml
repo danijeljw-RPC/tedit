@@ -6,6 +6,7 @@ on:
 
 jobs:
   build:
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -19,4 +20,5 @@ jobs:
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }}
       - name: Test
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+        timeout-minutes: 5
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --timeout 60 --interactive-debug-mode 0

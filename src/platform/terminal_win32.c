@@ -2,6 +2,7 @@
 
 #ifdef TEDIT_PLATFORM_WINDOWS
 
+#include <string.h>
 #include <windows.h>
 
 static bool control_pressed(const KEY_EVENT_RECORD *event) {
@@ -102,7 +103,18 @@ int platform_read_key(Platform *platform) {
 }
 
 int platform_key_from_escape_sequence(const char *sequence) {
-    (void)sequence;
+    if (strcmp(sequence, "q") == 0 || strcmp(sequence, "Q") == 0) return TEDIT_KEY_CTRL_Q;
+    if (strcmp(sequence, "[A") == 0) return TEDIT_KEY_ARROW_UP;
+    if (strcmp(sequence, "[B") == 0) return TEDIT_KEY_ARROW_DOWN;
+    if (strcmp(sequence, "[C") == 0) return TEDIT_KEY_ARROW_RIGHT;
+    if (strcmp(sequence, "[D") == 0) return TEDIT_KEY_ARROW_LEFT;
+    if (strcmp(sequence, "[H") == 0 || strcmp(sequence, "[1~") == 0) return TEDIT_KEY_HOME;
+    if (strcmp(sequence, "[F") == 0 || strcmp(sequence, "[4~") == 0) return TEDIT_KEY_END;
+    if (strcmp(sequence, "[3~") == 0) return TEDIT_KEY_DELETE;
+    if (strcmp(sequence, "[5~") == 0) return TEDIT_KEY_PAGE_UP;
+    if (strcmp(sequence, "[6~") == 0) return TEDIT_KEY_PAGE_DOWN;
+    if (strcmp(sequence, "[1;5H") == 0) return TEDIT_KEY_CTRL_HOME;
+    if (strcmp(sequence, "[1;5F") == 0) return TEDIT_KEY_CTRL_END;
     return '\x1b';
 }
 
