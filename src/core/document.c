@@ -374,3 +374,151 @@ void document_insert_newline(Document *doc, size_t row, size_t col, size_t *out_
     if (out_row != NULL) *out_row = row + 1;
     if (out_col != NULL) *out_col = 0;
 }
+
+int document_position_compare(DocumentPosition left, DocumentPosition right) {
+    if (left.row < right.row) return -1;
+    if (left.row > right.row) return 1;
+    if (left.col < right.col) return -1;
+    if (left.col > right.col) return 1;
+    return 0;
+}
+
+DocumentPosition document_clamp_position(const Document *doc, DocumentPosition position) {
+    if (doc->line_count == 0) {
+        position.row = 0;
+        position.col = 0;
+        return position;
+    }
+    if (position.row >= doc->line_count) {
+        position.row = doc->line_count - 1;
+    }
+    if (position.col > doc->lines[position.row].length) {
+        position.col = doc->lines[position.row].length;
+    }
+    return position;
+}
+
+DocumentRange document_range_normalize(const Document *doc, DocumentRange range) {
+    range.start = document_clamp_position(doc, range.start);
+    range.end = document_clamp_position(doc, range.end);
+    if (document_position_compare(range.start, range.end) > 0) {
+        DocumentPosition swap = range.start;
+        range.start = range.end;
+        range.end = swap;
+    }
+    return range;
+}
+
+char *document_extract_range_with_length(const Document *doc, DocumentRange range, size_t *out_length) {
+    range = document_range_normalize(doc, range);
+    if (document_position_compare(range.start, range.end) == 0) {
+        char *empty = malloc(1);
+        if (empty != NULL) empty[0] = '\0';
+        if (out_length != NULL) *out_length = 0;
+        return empty;
+    }
+
+    size_t length = 0;
+    if (range.start.row == range.end.row) {
+        length = range.end.col - range.start.col;
+    } else {
+        length += doc->lines[range.start.row].length - range.start.col;
+        length += 1;
+        for (size_t row = range.start.row + 1; row < range.end.row; row++) {
+            length += doc->lines[row].length + 1;
+        }
+        length += range.end.col;
+    }
+
+    char *text = malloc(length + 1);
+    if (text == NULL) return NULL;
+    size_t offset = 0;
+    if (out_length != NULL) *out_length = length;
+
+    if (range.start.row == range.end.row) {
+        memcpy(text, doc->lines[range.start.row].data + range.start.col, length);
+        text[length] = '\0';
+        return text;
+    }
+
+    const TextLine *start_line = &doc->lines[range.start.row];
+    size_t first_length = start_line->length - range.start.col;
+    memcpy(text + offset, start_line->data + range.start.col, first_length);
+    offset += first_length;
+    text[offset++] = '\n';
+
+    for (size_t row = range.start.row + 1; row < range.end.row; row++) {
+        const TextLine *line = &doc->lines[row];
+        memcpy(text + offset, line->data == NULL ? "" : line->data, line->length);
+        offset += line->length;
+        text[offset++] = '\n';
+    }
+
+    const TextLine *end_line = &doc->lines[range.end.row];
+    memcpy(text + offset, end_line->data == NULL ? "" : end_line->data, range.end.col);
+    offset += range.end.col;
+    text[offset] = '\0';
+    return text;
+}
+
+char *document_extract_range(const Document *doc, DocumentRange range) {
+    return document_extract_range_with_length(doc, range, NULL);
+}
+
+DocumentPosition document_delete_range(Document *doc, DocumentRange range) {
+    range = document_range_normalize(doc, range);
+    if (document_position_compare(range.start, range.end) == 0) {
+        return range.start;
+    }
+
+    if (range.start.row == range.end.row) {
+        TextLine *line = &doc->lines[range.start.row];
+        memmove(line->data + range.start.col,
+                line->data + range.end.col,
+                line->length - range.end.col + 1);
+        line->length -= range.end.col - range.start.col;
+        doc->dirty = true;
+        return range.start;
+    }
+
+    TextLine *start_line = &doc->lines[range.start.row];
+    TextLine *end_line = &doc->lines[range.end.row];
+    size_t suffix_length = end_line->length - range.end.col;
+    char *suffix = malloc(suffix_length + 1);
+    if (suffix == NULL) return range.start;
+    memcpy(suffix, end_line->data + range.end.col, suffix_length);
+    suffix[suffix_length] = '\0';
+
+    start_line->data[range.start.col] = '\0';
+    start_line->length = range.start.col;
+    if (!line_insert_bytes(start_line, start_line->length, suffix, suffix_length)) {
+        free(suffix);
+        return range.start;
+    }
+    free(suffix);
+
+    size_t rows_to_remove = range.end.row - range.start.row;
+    for (size_t i = 0; i < rows_to_remove; i++) {
+        document_remove_line(doc, range.start.row + 1);
+    }
+    doc->dirty = true;
+    return range.start;
+}
+
+DocumentPosition document_insert_bytes(Document *doc, DocumentPosition position, const char *data, size_t length) {
+    position = document_clamp_position(doc, position);
+    for (size_t i = 0; i < length; i++) {
+        if (data[i] == '\n') {
+            document_insert_newline(doc, position.row, position.col, &position.row, &position.col);
+        } else {
+            document_insert_char(doc, position.row, position.col, data[i]);
+            position.col++;
+        }
+    }
+    return position;
+}
+
+DocumentPosition document_replace_range(Document *doc, DocumentRange range, const char *data, size_t length) {
+    DocumentPosition position = document_delete_range(doc, range);
+    return document_insert_bytes(doc, position, data, length);
+}

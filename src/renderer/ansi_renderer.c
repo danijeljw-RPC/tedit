@@ -7,12 +7,32 @@ static void write_str(Platform *platform, const char *value) {
     platform_write(platform, value, (int)strlen(value));
 }
 
-static void write_line_slice(Platform *platform, const TextLine *line, size_t left, int width) {
+static void write_highlight_style(Platform *platform, EditorHighlight highlight) {
+    if (highlight == TEDIT_HIGHLIGHT_SELECTION) {
+        write_str(platform, "\x1b[7m");
+    } else if (highlight == TEDIT_HIGHLIGHT_SEARCH) {
+        write_str(platform, "\x1b[43;30m");
+    } else {
+        write_str(platform, "\x1b[m");
+    }
+}
+
+static void write_line_slice(Platform *platform, const Editor *editor, size_t row, const TextLine *line, size_t left, int width) {
     if (width <= 0) return;
     if (left >= line->length) return;
     size_t available = line->length - left;
     size_t count = available < (size_t)width ? available : (size_t)width;
-    platform_write(platform, line->data + left, (int)count);
+    EditorHighlight current = TEDIT_HIGHLIGHT_NONE;
+    for (size_t i = 0; i < count; i++) {
+        size_t col = left + i;
+        EditorHighlight next = editor_highlight_at(editor, row, col);
+        if (next != current) {
+            write_highlight_style(platform, next);
+            current = next;
+        }
+        platform_write(platform, line->data + col, 1);
+    }
+    if (current != TEDIT_HIGHLIGHT_NONE) write_highlight_style(platform, TEDIT_HIGHLIGHT_NONE);
 }
 
 static const char *mode_label(const Editor *editor) {
@@ -41,7 +61,7 @@ void ansi_render_editor(Platform *platform, const Editor *editor) {
         if (doc_row < editor->document.line_count) {
             const TextLine *line = &editor->document.lines[doc_row];
             size_t left = doc_row == editor->cursor.row ? editor->viewport.active_line_left_col : 0;
-            write_line_slice(platform, line, left, cols);
+            write_line_slice(platform, editor, doc_row, line, left, cols);
         } else {
             write_str(platform, "~");
         }

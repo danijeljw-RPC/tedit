@@ -3,8 +3,19 @@
 
 #include <stdbool.h>
 
+#define TEDIT_KEY_CTRL_A 1
+#define TEDIT_KEY_CTRL_C 3
+#define TEDIT_KEY_CTRL_F 6
+#define TEDIT_KEY_CTRL_G 7
+#define TEDIT_KEY_CTRL_K 11
+#define TEDIT_KEY_CTRL_P 16
 #define TEDIT_KEY_CTRL_Q 17
+#define TEDIT_KEY_CTRL_R 18
 #define TEDIT_KEY_CTRL_S 19
+#define TEDIT_KEY_CTRL_V 22
+#define TEDIT_KEY_CTRL_X 24
+#define TEDIT_KEY_CTRL_Y 25
+#define TEDIT_KEY_CTRL_Z 26
 #define TEDIT_KEY_BACKSPACE 127
 #define TEDIT_KEY_ARROW_LEFT 1000
 #define TEDIT_KEY_ARROW_RIGHT 1001
@@ -17,6 +28,10 @@
 #define TEDIT_KEY_PAGE_DOWN 1008
 #define TEDIT_KEY_CTRL_HOME 1009
 #define TEDIT_KEY_CTRL_END 1010
+#define TEDIT_KEY_SHIFT_ARROW_LEFT 1011
+#define TEDIT_KEY_SHIFT_ARROW_RIGHT 1012
+#define TEDIT_KEY_SHIFT_ARROW_UP 1013
+#define TEDIT_KEY_SHIFT_ARROW_DOWN 1014
 
 typedef struct Platform {
     int raw_mode_enabled;

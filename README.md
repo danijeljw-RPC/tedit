@@ -14,6 +14,16 @@ The first milestone is deliberately small:
 - edit text
 - save atomically
 
+MVP-002 adds safer editing actions:
+
+- undo/redo grouped edits
+- find prompt and next/previous navigation
+- replace current and replace all with confirmation
+- visible search and selection highlights
+- Shift+arrow selection
+- internal cut/copy/paste clipboard
+- cut line
+
 This repository is a starter skeleton for Claude Code CLI, Codex, or a human developer to begin implementation.
 The architecture must stay cross-platform as features are added: macOS is the primary local development target, but each milestone must keep Linux and Windows compiling through CMake and must not defer Windows support into a rewrite.
 
@@ -35,6 +45,24 @@ CI runs the same configure, build, and test flow on Ubuntu, macOS, and Windows.
 
 On Windows, the binary will be under the CMake build output directory.
 If `path/to/file.txt` does not exist, the editor starts a new unsaved document in write mode and creates the file when saved.
+
+## Default Keys
+
+- `w` / `W`: enter WRITE mode from READ mode
+- `Ctrl+S`: save
+- `Ctrl+Q`: quit immediately
+- `Ctrl+Z`: undo
+- `Ctrl+Y`: redo
+- `Ctrl+F`: find prompt
+- `Ctrl+G`: find next
+- `Ctrl+P`: find previous
+- `Ctrl+R`: replace current match
+- `Ctrl+A`: replace all matches with confirmation
+- `Shift+Arrow`: extend selection
+- `Ctrl+C`: copy selection to the internal clipboard
+- `Ctrl+X`: cut selection to the internal clipboard
+- `Ctrl+V`: paste from the internal clipboard
+- `Ctrl+K`: cut selection, or cut the current line when no selection is active
 
 ## Documentation
 
