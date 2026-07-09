@@ -104,7 +104,6 @@ TEdit v0.1.0
 
 Start here:
 
-- `TUI-Editor-Complete-Feature-Specification.md`
 - `docs/README.md`
 - `docs/project-brief.md`
 - `docs/architecture.md`
