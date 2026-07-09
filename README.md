@@ -82,7 +82,16 @@ If `path/to/file.txt` does not exist, the editor starts a new unsaved document i
 - `Alt+T`: open Tools menu
 - `Alt+H`: open Help menu
 
-On terminals where Option is not configured as Meta, press `Esc` and then the menu letter, for example `Esc` then `f` for File. Within an open menu, use arrow keys to navigate, Enter to run the selected command, and Escape to close the menu.
+Menu labels show their shortcut letter in bold on a white menu bar and are spaced across the top of the screen. On terminals where Option is not configured as Meta, press `Esc` and then the menu letter, for example `Esc` then `f` for File. Open menus render as bordered vertical dropdowns with bold shortcut letters on each item. Within an open menu, use Up/Down to navigate, Enter to run the selected command, Escape to close the menu, or press the item shortcut directly, for example `Esc`, `s`, `f` for Search -> Find.
+
+`Ctrl+Q` clears the terminal before exiting so menu and editor chrome are not left behind. Search -> Find and `Ctrl+F` open a centered prompt dialog that shows the query as you type.
+
+Help -> About opens a centered dialog:
+
+```text
+TEdit v0.1.0
+© RePass Cloud Pty Ltd 2026
+```
 
 ## MVP-003 Limitations
 

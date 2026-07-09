@@ -55,6 +55,10 @@ typedef struct {
 } EditorSettings;
 
 typedef struct {
+    bool open;
+} AboutDialog;
+
+typedef struct {
     bool active;
     DocumentPosition anchor;
     DocumentPosition cursor;
@@ -72,7 +76,9 @@ typedef struct {
     SyntaxDefinition syntax;
     SyntaxTokenLine syntax_scratch;
     EditorSettings settings;
+    AboutDialog about_dialog;
     bool menu_alt_prefix_pending;
+    bool clear_screen_on_exit;
     char *clipboard;
     size_t clipboard_length;
     EditorPromptMode prompt_mode;
@@ -111,5 +117,12 @@ void editor_set_tab_mode(Editor *editor, EditorTabMode mode);
 int editor_menu_is_open(const Editor *editor);
 MenuId editor_active_menu(const Editor *editor);
 SyntaxTokenType editor_syntax_token_at(Editor *editor, size_t row, size_t col);
+int editor_about_dialog_is_open(const Editor *editor);
+const char *editor_about_dialog_title(const Editor *editor);
+const char *editor_about_dialog_copyright(const Editor *editor);
+int editor_should_clear_screen_on_exit(const Editor *editor);
+int editor_prompt_dialog_is_open(const Editor *editor);
+const char *editor_prompt_dialog_title(const Editor *editor);
+const char *editor_prompt_dialog_value(const Editor *editor);
 
 #endif

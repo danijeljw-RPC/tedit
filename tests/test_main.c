@@ -1,7 +1,9 @@
 #include "core/document.h"
 #include "core/editor.h"
+#include "core/app_info.h"
 #include "core/syntax.h"
 #include "platform/platform.h"
+#include "renderer/ansi_renderer.h"
 #include "renderer/screen_buffer.h"
 #include "ui/file_browser.h"
 #include "ui/menu.h"
@@ -729,6 +731,7 @@ static void test_editor_backspace_newline_delete_and_quit(void) {
 
     editor_handle_key(&editor, TEDIT_KEY_CTRL_Q);
     assert(editor.should_quit == 1);
+    assert(editor_should_clear_screen_on_exit(&editor) == 1);
     editor_destroy(&editor);
 }
 
@@ -885,6 +888,12 @@ static void test_menu_model_and_alt_shortcuts(void) {
     assert(strcmp(menu_bar_menu_label(&menu, MENU_VIEW), "View") == 0);
     assert(strcmp(menu_bar_menu_label(&menu, MENU_TOOLS), "Tools") == 0);
     assert(strcmp(menu_bar_menu_label(&menu, MENU_HELP), "Help") == 0);
+    assert(menu_bar_menu_mnemonic_index(&menu, MENU_FILE) == 0);
+    assert(menu_bar_menu_column(&menu, MENU_FILE) == 1);
+    assert(menu_bar_menu_column(&menu, MENU_EDIT) == 8);
+    assert(menu_bar_menu_column(&menu, MENU_SEARCH) == 15);
+    assert(menu_bar_item_mnemonic_index(MENU_SEARCH, 0) == 0);
+    assert(menu_bar_command_for_shortcut(MENU_SEARCH, 'f') == MENU_COMMAND_FIND);
 
     Editor editor;
     editor_init(&editor);
@@ -906,6 +915,64 @@ static void test_menu_model_and_alt_shortcuts(void) {
     assert(editor_active_menu(&editor) == MENU_TOOLS);
     editor_handle_key(&editor, TEDIT_KEY_ALT_H);
     assert(editor_active_menu(&editor) == MENU_HELP);
+    editor_destroy(&editor);
+}
+
+static void test_search_menu_item_shortcut_runs_find(void) {
+    Editor editor;
+    editor_init(&editor);
+
+    editor_handle_key(&editor, '\x1b');
+    editor_handle_key(&editor, 's');
+    assert(editor_active_menu(&editor) == MENU_SEARCH);
+    editor_handle_key(&editor, 'f');
+
+    assert(editor_menu_is_open(&editor) == 0);
+    assert(editor_prompt_dialog_is_open(&editor) == 1);
+    assert(strcmp(editor_prompt_dialog_title(&editor), "Find") == 0);
+    editor_destroy(&editor);
+}
+
+static void test_help_about_opens_about_dialog(void) {
+    Editor editor;
+    editor_init(&editor);
+
+    editor_handle_key(&editor, TEDIT_KEY_ALT_H);
+    assert(editor_active_menu(&editor) == MENU_HELP);
+    assert(menu_bar_active_item(&editor.menu_bar) == 0);
+    editor_handle_key(&editor, '\n');
+
+    assert(editor_about_dialog_is_open(&editor) == 1);
+    assert(strlen(tedit_app_name()) > 0);
+    assert(strlen(tedit_app_version()) > 0);
+    assert(strcmp(editor_about_dialog_title(&editor), tedit_app_version_title()) == 0);
+    assert(strcmp(editor_about_dialog_copyright(&editor), tedit_app_copyright()) == 0);
+    editor_handle_key(&editor, '\x1b');
+    assert(editor_about_dialog_is_open(&editor) == 0);
+    editor_destroy(&editor);
+}
+
+static void test_utf8_display_width_counts_copyright_as_one_cell(void) {
+    assert(ansi_text_display_width(tedit_app_copyright()) == 27);
+}
+
+static void test_search_find_menu_opens_visible_prompt_dialog(void) {
+    Editor editor;
+    editor_init(&editor);
+
+    editor_handle_key(&editor, TEDIT_KEY_ALT_S);
+    assert(editor_active_menu(&editor) == MENU_SEARCH);
+    editor_handle_key(&editor, '\n');
+
+    assert(editor_prompt_dialog_is_open(&editor) == 1);
+    assert(strcmp(editor_prompt_dialog_title(&editor), "Find") == 0);
+    editor_handle_key(&editor, 'c');
+    editor_handle_key(&editor, 'a');
+    editor_handle_key(&editor, 't');
+    assert(strcmp(editor_prompt_dialog_value(&editor), "cat") == 0);
+
+    editor_handle_key(&editor, '\x1b');
+    assert(editor_prompt_dialog_is_open(&editor) == 0);
     editor_destroy(&editor);
 }
 
@@ -1149,6 +1216,10 @@ int main(void) {
     test_home_end_move_within_line();
     test_page_and_document_navigation_keys();
     test_menu_model_and_alt_shortcuts();
+    test_search_menu_item_shortcut_runs_find();
+    test_help_about_opens_about_dialog();
+    test_utf8_display_width_counts_copyright_as_one_cell();
+    test_search_find_menu_opens_visible_prompt_dialog();
     test_escape_then_letter_opens_menu_as_alt_prefix();
     test_open_and_save_as_prompts_without_command_line_path();
     test_file_browser_lists_parent_dirs_then_files_and_activates();

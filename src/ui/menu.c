@@ -1,44 +1,50 @@
 #include "menu.h"
 #include "platform/platform.h"
 
+#include <string.h>
+
 static const MenuItem file_items[] = {
-    {"Open", MENU_COMMAND_OPEN},
-    {"Save", MENU_COMMAND_SAVE},
-    {"Save As", MENU_COMMAND_SAVE_AS},
-    {"Quit", MENU_COMMAND_QUIT},
+    {"Open", MENU_COMMAND_OPEN, 0},
+    {"Save", MENU_COMMAND_SAVE, 0},
+    {"Save As", MENU_COMMAND_SAVE_AS, 0},
+    {"Quit", MENU_COMMAND_QUIT, 0},
 };
 
 static const MenuItem edit_items[] = {
-    {"Undo", MENU_COMMAND_UNDO},
-    {"Redo", MENU_COMMAND_REDO},
-    {"Copy", MENU_COMMAND_COPY},
-    {"Cut", MENU_COMMAND_CUT},
-    {"Paste", MENU_COMMAND_PASTE},
+    {"Undo", MENU_COMMAND_UNDO, 0},
+    {"Redo", MENU_COMMAND_REDO, 0},
+    {"Copy", MENU_COMMAND_COPY, 0},
+    {"Cut", MENU_COMMAND_CUT, 0},
+    {"Paste", MENU_COMMAND_PASTE, 0},
 };
 
 static const MenuItem search_items[] = {
-    {"Find", MENU_COMMAND_FIND},
-    {"Next", MENU_COMMAND_FIND_NEXT},
-    {"Previous", MENU_COMMAND_FIND_PREVIOUS},
+    {"Find", MENU_COMMAND_FIND, 0},
+    {"Next", MENU_COMMAND_FIND_NEXT, 0},
+    {"Previous", MENU_COMMAND_FIND_PREVIOUS, 0},
 };
 
 static const MenuItem view_items[] = {
-    {"Line Numbers", MENU_COMMAND_TOGGLE_LINE_NUMBERS},
-    {"Whitespace", MENU_COMMAND_TOGGLE_WHITESPACE},
+    {"Line Numbers", MENU_COMMAND_TOGGLE_LINE_NUMBERS, 0},
+    {"Whitespace", MENU_COMMAND_TOGGLE_WHITESPACE, 0},
 };
 
 static const MenuItem tools_items[] = {
-    {"Literal Tab", MENU_COMMAND_TAB_LITERAL},
-    {"Tab 2 Spaces", MENU_COMMAND_TAB_TWO_SPACES},
-    {"Tab 4 Spaces", MENU_COMMAND_TAB_FOUR_SPACES},
+    {"Literal Tab", MENU_COMMAND_TAB_LITERAL, 0},
+    {"Tab 2 Spaces", MENU_COMMAND_TAB_TWO_SPACES, 0},
+    {"Tab 4 Spaces", MENU_COMMAND_TAB_FOUR_SPACES, 0},
 };
 
 static const MenuItem help_items[] = {
-    {"About", MENU_COMMAND_ABOUT},
+    {"About", MENU_COMMAND_ABOUT, 0},
 };
 
 static const char *menu_labels[] = {
     "File", "Edit", "Search", "View", "Tools", "Help"
+};
+
+static const size_t menu_mnemonic_indexes[] = {
+    0, 0, 0, 0, 0, 0
 };
 
 static const MenuItem *items_for_menu(MenuId id, size_t *count) {
@@ -70,6 +76,22 @@ const char *menu_bar_menu_label(const MenuBar *menu, MenuId id) {
     return menu_labels[id];
 }
 
+size_t menu_bar_menu_mnemonic_index(const MenuBar *menu, MenuId id) {
+    (void)menu;
+    if (id < 0 || id >= MENU_COUNT) return 0;
+    return menu_mnemonic_indexes[id];
+}
+
+int menu_bar_menu_column(const MenuBar *menu, MenuId id) {
+    (void)menu;
+    if (id < 0 || id >= MENU_COUNT) return 1;
+    int column = 1;
+    for (int i = 0; i < (int)id; i++) {
+        column += (int)strlen(menu_labels[i]) + 3;
+    }
+    return column;
+}
+
 size_t menu_bar_item_count(MenuId id) {
     size_t count = 0;
     items_for_menu(id, &count);
@@ -81,6 +103,28 @@ const MenuItem *menu_bar_item(MenuId id, size_t index) {
     const MenuItem *items = items_for_menu(id, &count);
     if (items == NULL || index >= count) return NULL;
     return &items[index];
+}
+
+size_t menu_bar_item_mnemonic_index(MenuId id, size_t index) {
+    const MenuItem *item = menu_bar_item(id, index);
+    return item == NULL ? 0 : item->mnemonic_index;
+}
+
+static char lower_ascii(int key) {
+    if (key >= 'A' && key <= 'Z') return (char)(key - 'A' + 'a');
+    return (char)key;
+}
+
+MenuCommandId menu_bar_command_for_shortcut(MenuId id, int key) {
+    size_t count = menu_bar_item_count(id);
+    char wanted = lower_ascii(key);
+    for (size_t i = 0; i < count; i++) {
+        const MenuItem *item = menu_bar_item(id, i);
+        if (item == NULL || item->label == NULL) continue;
+        char actual = lower_ascii(item->label[item->mnemonic_index]);
+        if (actual == wanted) return item->command;
+    }
+    return MENU_COMMAND_NONE;
 }
 
 bool menu_bar_open_shortcut(MenuBar *menu, int key) {

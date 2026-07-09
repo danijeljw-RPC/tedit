@@ -39,6 +39,7 @@ typedef enum {
 typedef struct {
     const char *label;
     MenuCommandId command;
+    size_t mnemonic_index;
 } MenuItem;
 
 typedef struct {
@@ -50,8 +51,12 @@ typedef struct {
 void menu_bar_init(MenuBar *menu);
 size_t menu_bar_menu_count(const MenuBar *menu);
 const char *menu_bar_menu_label(const MenuBar *menu, MenuId id);
+size_t menu_bar_menu_mnemonic_index(const MenuBar *menu, MenuId id);
+int menu_bar_menu_column(const MenuBar *menu, MenuId id);
 size_t menu_bar_item_count(MenuId id);
 const MenuItem *menu_bar_item(MenuId id, size_t index);
+size_t menu_bar_item_mnemonic_index(MenuId id, size_t index);
+MenuCommandId menu_bar_command_for_shortcut(MenuId id, int key);
 bool menu_bar_open_shortcut(MenuBar *menu, int key);
 void menu_bar_close(MenuBar *menu);
 void menu_bar_handle_key(MenuBar *menu, int key);

@@ -1,4 +1,5 @@
 #include "editor.h"
+#include "app_info.h"
 #include "platform/platform.h"
 #include "renderer/ansi_renderer.h"
 
@@ -27,7 +28,9 @@ void editor_init(Editor *editor) {
     editor->settings.show_line_numbers = false;
     editor->settings.show_whitespace = false;
     editor->settings.tab_mode = EDITOR_TAB_LITERAL;
+    editor->about_dialog.open = false;
     editor->menu_alt_prefix_pending = false;
+    editor->clear_screen_on_exit = false;
     editor->clipboard = NULL;
     editor->clipboard_length = 0;
     editor->prompt_mode = EDITOR_PROMPT_NONE;
@@ -98,7 +101,10 @@ static DocumentPosition cursor_to_position(Cursor cursor);
 int editor_has_selection(const Editor *editor);
 
 void editor_update_viewport(Editor *editor) {
-    int menu_rows = editor->menu_bar.open ? 2 : 1;
+    int menu_rows = 2;
+    if (editor->menu_bar.open) {
+        menu_rows += (int)menu_bar_item_count(editor->menu_bar.active_menu) + 2;
+    }
     int usable_rows = editor->screen_rows - 2 - menu_rows;
     if (usable_rows < 1) usable_rows = 1;
 
@@ -257,6 +263,48 @@ SyntaxTokenType editor_syntax_token_at(Editor *editor, size_t row, size_t col) {
         return SYNTAX_TOKEN_NORMAL;
     }
     return syntax_token_line_type_at(&editor->syntax_scratch, col);
+}
+
+static void editor_request_quit(Editor *editor) {
+    editor->should_quit = 1;
+    editor->clear_screen_on_exit = true;
+}
+
+int editor_should_clear_screen_on_exit(const Editor *editor) {
+    return editor->clear_screen_on_exit ? 1 : 0;
+}
+
+int editor_prompt_dialog_is_open(const Editor *editor) {
+    return editor->prompt_mode != EDITOR_PROMPT_NONE && editor->prompt_mode != EDITOR_PROMPT_CONFIRM_REPLACE_ALL;
+}
+
+const char *editor_prompt_dialog_title(const Editor *editor) {
+    switch (editor->prompt_mode) {
+        case EDITOR_PROMPT_FIND: return "Find";
+        case EDITOR_PROMPT_REPLACE_CURRENT: return "Replace current with";
+        case EDITOR_PROMPT_REPLACE_ALL: return "Replace all with";
+        case EDITOR_PROMPT_OPEN: return "Open";
+        case EDITOR_PROMPT_SAVE_AS: return "Save As";
+        default: return "";
+    }
+}
+
+const char *editor_prompt_dialog_value(const Editor *editor) {
+    return editor->prompt_buffer;
+}
+
+int editor_about_dialog_is_open(const Editor *editor) {
+    return editor->about_dialog.open ? 1 : 0;
+}
+
+const char *editor_about_dialog_title(const Editor *editor) {
+    (void)editor;
+    return tedit_app_version_title();
+}
+
+const char *editor_about_dialog_copyright(const Editor *editor) {
+    (void)editor;
+    return tedit_app_copyright();
 }
 
 static DocumentPosition cursor_to_position(Cursor cursor) {
@@ -654,7 +702,7 @@ static void editor_execute_menu_command(Editor *editor, MenuCommandId command) {
             editor_start_save_as_prompt(editor);
             break;
         case MENU_COMMAND_QUIT:
-            editor->should_quit = 1;
+            editor_request_quit(editor);
             break;
         case MENU_COMMAND_UNDO:
             if (editor->mode == EDITOR_MODE_WRITE) editor_undo(editor);
@@ -700,7 +748,8 @@ static void editor_execute_menu_command(Editor *editor, MenuCommandId command) {
             editor_set_tab_mode(editor, EDITOR_TAB_FOUR_SPACES);
             break;
         case MENU_COMMAND_ABOUT:
-            snprintf(editor->status, sizeof(editor->status), "TEdit MVP-003");
+            editor->about_dialog.open = true;
+            snprintf(editor->status, sizeof(editor->status), "About");
             break;
         case MENU_COMMAND_NONE:
         default:
@@ -792,7 +841,15 @@ static void editor_handle_prompt_key(Editor *editor, int key) {
 
 void editor_handle_key(Editor *editor, int key) {
     if (key == TEDIT_KEY_CTRL_Q) {
-        editor->should_quit = 1;
+        editor_request_quit(editor);
+        return;
+    }
+
+    if (editor->about_dialog.open) {
+        if (key == '\x1b' || key == '\r' || key == '\n') {
+            editor->about_dialog.open = false;
+            snprintf(editor->status, sizeof(editor->status), "About closed");
+        }
         return;
     }
 
@@ -811,6 +868,12 @@ void editor_handle_key(Editor *editor, int key) {
             menu_bar_close(&editor->menu_bar);
             editor->menu_alt_prefix_pending = false;
             snprintf(editor->status, sizeof(editor->status), "Menu closed");
+            return;
+        }
+        MenuCommandId shortcut_command = menu_bar_command_for_shortcut(editor->menu_bar.active_menu, key);
+        if (shortcut_command != MENU_COMMAND_NONE) {
+            menu_bar_close(&editor->menu_bar);
+            editor_execute_menu_command(editor, shortcut_command);
             return;
         }
         if (key == '\r' || key == '\n') {
@@ -966,6 +1029,9 @@ int editor_run(Editor *editor, Platform *platform) {
         editor_handle_key(editor, key);
     }
 
+    if (editor->clear_screen_on_exit) {
+        ansi_clear_screen(platform);
+    }
     platform_leave_raw_mode(platform);
     return 0;
 }
